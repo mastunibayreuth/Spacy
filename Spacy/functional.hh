@@ -72,6 +72,6 @@ namespace Spacy
 
     private:
         FunctionalDetail::Table< Functional > function_;
-        clang::type_erasure::SBOStorage< 16 > impl_;
+        clang::type_erasure::Storage impl_;
     };
 }

@@ -16,33 +16,32 @@ namespace Spacy
         template < class Interface >
         struct Table
         {
-            using call_const_Vector_ref_function =
-                Real ( * )( const clang::type_erasure::SBOStorage< 16 >&, const Vector& );
+            using call_const_Vector_ref_function = Real ( * )( const clang::type_erasure::Storage&,
+                                                               const Vector& );
             call_const_Vector_ref_function call_const_Vector_ref;
-            using d1_const_Vector_ref_function =
-                Vector ( * )( const clang::type_erasure::SBOStorage< 16 >&, const Vector& );
+            using d1_const_Vector_ref_function = Vector ( * )( const clang::type_erasure::Storage&,
+                                                               const Vector& );
             d1_const_Vector_ref_function d1_const_Vector_ref;
-            using domain_function =
-                const VectorSpace& (*)( const clang::type_erasure::SBOStorage< 16 >& );
+            using domain_function = const VectorSpace& (*)( const clang::type_erasure::Storage& );
             domain_function domain;
         };
 
         template < class Interface, class Impl >
         struct execution_wrapper
         {
-            static Real call_const_Vector_ref( const clang::type_erasure::SBOStorage< 16 >& data,
+            static Real call_const_Vector_ref( const clang::type_erasure::Storage& data,
                                                const Vector& x )
             {
                 return data.template get< Impl >().operator()( x );
             }
 
-            static Vector d1_const_Vector_ref( const clang::type_erasure::SBOStorage< 16 >& data,
+            static Vector d1_const_Vector_ref( const clang::type_erasure::Storage& data,
                                                const Vector& x )
             {
                 return data.template get< Impl >().d1( x );
             }
 
-            static const VectorSpace& domain( const clang::type_erasure::SBOStorage< 16 >& data )
+            static const VectorSpace& domain( const clang::type_erasure::Storage& data )
             {
                 return data.template get< Impl >().domain();
             }

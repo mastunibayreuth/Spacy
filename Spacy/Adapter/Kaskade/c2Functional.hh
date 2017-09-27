@@ -107,7 +107,8 @@ namespace Spacy
                   onlyLowerTriangle_(g.onlyLowerTriangle_),
                   rbegin_(g.rbegin_), rend_(g.rend_), cbegin_(g.cbegin_), cend_(g.cend_),
                   solverCreator_(g.solverCreator_),
-                  operatorSpace_(g.operatorSpace_)
+                  operatorSpace_(g.operatorSpace_),
+                  normalComplianceParameter_(g.normalComplianceParameter_)
             {}
 
             /**
@@ -132,6 +133,7 @@ namespace Spacy
                 cend_ = g.cend_;
                 solverCreator_ = g.solverCreator_;
                 operatorSpace_ = g.operatorSpace_;
+                normalComplianceParameter_ = g.normalComplianceParameter_;
             }
 
             /**
@@ -157,6 +159,43 @@ namespace Spacy
 
                 return value_;
             }
+
+            // added by Stoecklein Matthias
+            /**
+             * @brief Get reference to the functional.
+             * @return \f$&f\f$
+             */
+            auto & getFunctional()
+            {
+                return f_;
+            }
+
+            auto & getParameter()
+            {
+                return normalComplianceParameter_;
+            }
+            // added by Stoecklein Matthias
+            /**
+             * @brief Update path-parameter.
+             */
+            // not good delete  has to be done via getFunctional
+            void updateParam(Real lambda)
+            {
+              //  std::cout << "UpdateGetsCalledAtAll: " << std::endl;
+                f_.paramUpdate(get(lambda));
+                normalComplianceParameter_ = get(lambda);
+              //  std::cout << "NormalComplianceParameterUpdate: " << normalComplianceParameter_ << std::endl;
+
+                // Does this work ??
+                old_X_f_ = {};
+                old_X_df_={};
+                old_X_ddf_={};
+                if(old_X_f_)
+                    std::cout << "ResetFail: " << std::endl << std::endl;
+            }
+
+
+
 
             /**
              * @brief Compute first directional derivative \f$f'(x) \in X^* \f$.
@@ -239,8 +278,10 @@ namespace Spacy
             /// Assemble \f$f(x)\f$.
             void assembleFunctional(const ::Spacy::Vector& x) const
             {
-                if( old_X_f_ && old_X_f_ == x )
+                if( old_X_f_ && old_X_f_ == x ) {
+
                     return;
+                }
 
                 VariableSetDescription variableSet(spaces_);
                 typename VariableSetDescription::VariableSet u(variableSet);
@@ -251,6 +292,11 @@ namespace Spacy
                 assembler.assemble(::Kaskade::linearization(f_,u) , Assembler::VALUE , getNumberOfThreads() );
                 value_ = assembler.functional();
 
+                assembler.assemble(::Kaskade::linearization(f_,u) , Assembler::RHS , getNumberOfThreads() );
+                CoefficientVector coeff(assembler.rhs());
+                boost::fusion::at_c<0>(coeff.data) = boost::fusion::at_c<0>(u.data).coefficients();
+               // std::cout << "NormOfX: " << coeff.two_norm() << std::endl;
+
                 old_X_f_ = x;
             }
 
@@ -258,15 +304,49 @@ namespace Spacy
             void assembleGradient(const ::Spacy::Vector& x) const
             {
                 using boost::fusion::at_c;
-                if( old_X_df_ && old_X_df_ == x ) return;
+                if( old_X_df_ && old_X_df_ == x )
+                {
+                 //   std::cout << "The same iterate: No new assembling of Gradient: " << std::endl;
+                    return;
+                }
+
+
 
                 VariableSetDescription variableSet(spaces_);
                 typename VariableSetDescription::VariableSet u(variableSet);
 
                 copy(x,u);
 
+                //std::cout << "BeginTestSensitivity: " << std::endl;
+                //std::cout << "Parameter: "  << 2.0 * normalComplianceParameter_ << std::endl;
+                //f_.paramUpdate(2.0*normalComplianceParameter_ );
                 Assembler assembler(spaces_);
+                //assembler.assemble(::Kaskade::linearization(f_,u) , Assembler::RHS , getNumberOfThreads() );
+               // CoefficientVector coeff0(assembler.rhs());
+                //std::cout <<  "NormRHS: " << coeff0.two_norm() << std::endl << std::endl;
+
+
+                //std::cout << "Parameter: " << 0.5* normalComplianceParameter_ << std::endl;
+                //f_.paramUpdate(0.5*normalComplianceParameter_);
+               // assembler.assemble(::Kaskade::linearization(f_,u) , Assembler::RHS , getNumberOfThreads() );
+                //CoefficientVector coeff1(assembler.rhs());
+                //std::cout <<  "NormRHS: " << coeff1.two_norm() << std::endl << std::endl;
+               // std::cout << "EndTestSensitiviy: " << std::endl << std::endl;
+
+
+
+
+          //      f_.paramUpdate(normalComplianceParameter_);
+              //  Assembler assembler(spaces_);
                 assembler.assemble(::Kaskade::linearization(f_,u) , Assembler::RHS , getNumberOfThreads() );
+
+
+              //  CoefficientVector coeff(assembler.rhs());
+              //  std::cout << "Param: " << normalComplianceParameter_ << "   NormRHS: " << coeff.two_norm() << std::endl << std::endl;
+               // boost::fusion::at_c<0>(coeff.data) = boost::fusion::at_c<0>(u.data).coefficients();
+             //   std::cout << "StateNorm: " << coeff.two_norm() << std::endl << std::endl;
+
+
                 copyFromCoefficientVector<VariableSetDescription>(CoefficientVector(assembler.rhs()),rhs_);
 
                 old_X_df_ = x;
@@ -289,7 +369,7 @@ namespace Spacy
                 old_X_ddf_ = x;
             }
 
-            FunctionalDefinition f_;
+            mutable FunctionalDefinition f_;
             Spaces spaces_;
             mutable KaskadeOperator A_ = {};
             mutable double value_ = 0;
@@ -307,6 +387,7 @@ namespace Spacy
 
             };
             std::shared_ptr<VectorSpace> operatorSpace_ = nullptr;
+            double normalComplianceParameter_ = 0.0;
         };
 
         /**

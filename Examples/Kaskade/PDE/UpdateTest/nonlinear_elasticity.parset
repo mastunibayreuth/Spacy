@@ -1,0 +1,36 @@
+#Parameters for Nonlinear Elasticity
+
+
+onlyLowerTriangle = false
+
+
+order             = 1
+refinements       = 1
+
+#boundary_force_z  = 430
+#boundary_force_z = 1.0
+boundary_force_z = 10
+
+
+#Material Parameters
+lambda = 7.76e5
+mu = 8.62e4
+
+d = 1e5
+
+tauInit = 1e-3
+tauMin = 1e-4
+
+
+#tauInit = 1e-3
+#tauMin = 1e-5
+
+
+tauIncrease = 1.5
+tauDamp = 0.5
+
+maxSteps = 1000
+
+ nonlinUpdate = true
+ fantasyMaterial = false
+ lubkollMaterial = false

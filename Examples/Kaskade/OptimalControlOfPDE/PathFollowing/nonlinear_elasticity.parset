@@ -1,0 +1,42 @@
+#Parameters for Nonlinear Elasticity
+
+
+order             = 1
+refinements       = 2
+numberOfCubes = 7
+
+onlyLowerTriangle = false
+
+regularization = 1e-16
+
+#boundary force in z direction
+
+initial_boundary_force  = 0
+reference_boundary_force = -100
+
+referenceNormalComplianceParameter = 5e5
+
+initialNormalComplianceParameter = 1.0
+maxNormalComplianceParameter = 5e5
+
+
+ desiredAccuracy = 1e-6
+ eps = 1e-12
+ alpha = 1e-6
+    
+ maxSteps = 500
+ iterativeRefinements =  0
+ FEorder = 1
+ verbose = 2
+    
+ desContr =  0.5
+# relDesContr =  desContr+0.1
+ relDesContr = 0.6
+ maxContr =  0.75
+
+#Material Parameters
+
+lambda = 7.76e5
+mu = 8.62e4
+d = 10e5
+

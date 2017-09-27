@@ -1,0 +1,583 @@
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+/*                                                                           */
+/*  This file is part of the library KASKADE 7                               */
+/*    see http://www.zib.de/Numerik/numsoft/kaskade7/                        */
+/*                                                                           */
+/*  Copyright (C) 2002-2013 Zuse Institute Berlin                            */
+/*                                                                           */
+/*  KASKADE 7 is distributed under the terms of the ZIB Academic License.    */
+/*    see $KASKADE/academic.txt                                              */
+/*                                                                           */
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+#define FUSION_MAX_VECTOR_SIZE 15
+#define SPACY_ENABLE_LOGGING
+#include <chrono>
+#include <iostream>
+
+#include <dune/grid/config.h>
+#include <dune/grid/uggrid.hh>
+
+#include <Spacy/Adapter/kaskade.hh>
+#include <Spacy/Algorithm/CompositeStep/affineCovariantSolver.hh>
+
+#include "fem/gridmanager.hh"
+#include "fem/lagrangespace.hh"
+#include <fem/boundaryspace.hh>
+#include "fem/forEach.hh"
+#include "io/vtk.hh"
+#include "utilities/kaskopt.hh"
+#include "utilities/gridGeneration.hh"
+#include "fem/constantspace.hh"
+
+#include <Spacy/Algorithm/CG/linearSolver.hh>
+// #include <Spacy/Algorithm/CG/trivialPreconditioner.hh>
+// #include <Spacy/Algorithm/CG/directPreconditioner.hh>
+#include <Spacy/Adapter/Kaskade/directBlockPreconditioner.hh>
+#include <Spacy/Algorithm/PathFollowing/pathfollowing.hh>
+
+#include "linalg/simpleLAPmatrix.hh"
+
+#include "parameters.hh"
+#include  "setup.hh"
+
+#define NCOMPONENTS 1
+#include "nonlinear_elasticity.hh"
+// #include "functional.hh"
+// #include "trackingFunctional.hh"
+
+#include <boost/type_index.hpp>
+#include <fung/examples/rubber/mooney_rivlin.hh>
+#include <dune/grid/utility/hierarchicsearch.hh>
+#include <algorithm>
+#include <fem/forEach.hh>
+
+int main(int argc, char *argv[])
+{
+
+	/// Change displacements to deformations in nonlinear_elasticity.hh
+
+	using namespace Kaskade;
+
+	constexpr int dim = 3;
+
+	const std::string parFile("nonlinear_elasticity.parset");
+
+	ProblemParameters parameters = readParameters(parFile);
+
+	const unsigned refinements = parameters.refinements;
+	const unsigned order = parameters.order;
+	const bool onlyLowerTriangle = parameters.onlyLowerTriangle;
+	const unsigned numberOfCubes = parameters.numberOfCubes;
+	const double regularization = parameters.regularization;
+
+	const double initial_boundary_force = parameters.initial_boundary_force;
+	const double reference_boundary_force = parameters.reference_boundary_force;
+
+	const double referenceNormalComplianceParameter =
+			parameters.referenceNormalComplianceParameter;
+	const double initialNormalComplianceParameter =
+			parameters.initialNormalComplianceParameter;
+	const double maxNormalComplianceParameter =
+			parameters.maxNormalComplianceParameter;
+
+	const double desiredAccuracy = parameters.desiredAccuracy;
+	const double eps = parameters.eps;
+	const double alpha = parameters.alpha;
+
+	const int maxSteps = parameters.maxSteps;
+	const int iterativeRefinements = parameters.iterativeRefinements;
+	const int FEorder = parameters.FEorder;
+	const int verbose = parameters.verbose;
+
+	const double desContr = parameters.desContr;
+	const double relDesContr = parameters.relDesContr;
+	const double maxContr = parameters.maxContr;
+
+	static constexpr int stateId = 0;
+	static constexpr int controlId = 1;
+	static constexpr int adjointId = 2;
+
+	using Scalar = double;
+	using Grid = Dune::UGGrid<dim>;
+
+	using Vector = Dune::FieldVector<Scalar, dim>;
+
+	const Vector reference_force_density
+	{ 0., 0., reference_boundary_force };
+
+	// Creates grid by connecting cubes
+	auto grid = createGridFactory<Grid>(numberOfCubes, dim);
+
+	GridManager<Grid> gridManager(std::move(grid));
+	gridManager.globalRefine(refinements);
+
+//	const int init_size = gridManager.grid().size(dim) * dim;
+
+//	std::vector<double> init(init_size, 0.0);
+//
+//	for (int i = 2; i < init_size; i += 3)
+//	{
+//		init[i] = -1.5;
+//	}
+
+	using H1SpaceRef = FEFunctionSpace<ContinuousLagrangeMapper<double,typename Grid::LeafGridView> >;
+	using SpacesRef = boost::fusion::vector<H1SpaceRef const*>;
+	using RefVariableDescriptions = boost::fusion::vector< Variable<SpaceIndex<0>,Components<dim>,VariableId<0> > >;
+	using RefVariableSetDescription = VariableSetDescription<SpacesRef,RefVariableDescriptions>;
+	using VariableSetRef = typename RefVariableSetDescription::VariableSet;
+
+	H1SpaceRef deformationSpaceRef(gridManager,
+			gridManager.grid().leafGridView(), order);
+
+	SpacesRef spacesRef(&deformationSpaceRef);
+	RefVariableSetDescription descriptionRef(spacesRef,
+	{ "y" });
+
+	VariableSetRef y(descriptionRef);
+
+
+//	using Matrix = Dune::FieldMatrix<double,dim,dim>;
+//
+//	auto y00 = FunG::LinearAlgebra::unitMatrix<Matrix>();
+//	auto refIntegrand = FunG::compressibleMooneyRivlin<FunG::Pow<2>, FunG::LN,
+//			Matrix>(100, 100, 1, -1, y00);
+//
+//	using RefFunctional = NonlinearElasticityFunctional<decltype(refIntegrand),RefVariableSetDescription>;
+//	using AssemblerRef = VariationalFunctionalAssembler<LinearizationAt<RefFunctional> >;
+//
+//	auto FRef = RefFunctional(refIntegrand, reference_force_density,
+//			referenceNormalComplianceParameter);
+//	AssemblerRef assemblerRef(gridManager, spacesRef);
+//
+//	VariableSetRef y(descriptionRef);
+//
+//	/*   VariableSetRef reference_deformation(descriptionRef);
+//	 reference_deformation.read(init.begin());*/
+//
+//	assemblerRef.assemble(linearization(FRef, y));
+//	//  Spacy
+//
+//	auto domainRef = Spacy::Kaskade::makeHilbertSpace<RefVariableSetDescription>(spacesRef,
+//			{ 0u });
+//	auto f = Spacy::Kaskade::makeC2Functional(FRef, domainRef);
+//
+//	using FTypeRef = Spacy::Kaskade::C2Functional<RefFunctional>;
+//	using FLinRef = typename Spacy::Kaskade::C2Functional<RefFunctional>::Linearization;
+//
+//	using X0 = Dune::BlockVector<Dune::FieldVector<double,dim>>;
+//	using NMatrix = NumaBCRSMatrix<Dune::FieldMatrix<double,dim,dim>>;
+//
+//	NMatrix Amat(assemblerRef.template get<0, 0>(), true);
+//
+//	auto mg = makeBPX(Amat, gridManager);
+//
+//	std::function<Spacy::LinearSolver(const FLinRef&)> precond =
+//			[&mg](const FLinRef& f)
+//			{
+//				return Spacy::makeTCGSolver(f,Spacy::Kaskade::makePreconditioner<typename FTypeRef::VariableSetDescription,typename FTypeRef::VariableSetDescription>(f.range(),f.domain(),mg));
+//			};
+//
+//	// compute solution by ACR
+//
+//	f.setSolverCreator(precond);
+//	Spacy::ACR::ACRSolver solver(f);
+//	auto resultRef = solver();
+//
+//	VariableSetRef reference_deformation(descriptionRef);
+//	Spacy::Kaskade::copy(resultRef, reference_deformation);
+//
+//	IoOptions optionsRef;
+//	optionsRef.outputType = IoOptions::ascii;
+//
+//	std::string outfilenameRef("ReferenceDeformation");
+//	writeVTKFile(gridManager.grid().leafGridView(), reference_deformation,
+//			outfilenameRef, optionsRef, 1);
+
+	// Boundary Mapper are not yet implemented for discontinuous boundary functions
+	using L2Space = FEFunctionSpace<BoundaryMapper<ContinuousLagrangeMapper, double,typename Grid::LeafGridView> >;
+	using ControlSpace = boost::fusion::vector<L2Space const*>;
+	using ControlVariableDescriptions = boost::fusion::vector< Variable<SpaceIndex<0>,Components<dim>,VariableId<0> > >;
+	using ControlVariableSetDescription = VariableSetDescription<ControlSpace,ControlVariableDescriptions>;
+	using ControlVariableSet = typename ControlVariableSetDescription::VariableSet;
+
+	auto & indexSet = gridManager.grid().leafGridView().indexSet();
+
+	std::vector<int> totalIndexSet;
+	std::vector<int> partialIndexSet;
+
+	// iteration over faces does not work
+
+	{
+		unsigned counter = 0;
+		unsigned globalCounter = 0;
+		auto gv = gridManager.grid().leafGridView();
+
+		const Vector up
+		{ 0., 0., 1.0 };
+
+//		forEachBoundaryFace(gv, [&up, &globalCounter, &gv] (auto & face)
+//		{
+//
+//		});
+
+		for (const auto & e : Dune::elements(gv))
+		{
+
+			/*std::cout << "EntityIndex: " << gv.indexSet().index(e) << '\n';*/
+
+			// efficient ??
+			if (e.hasBoundaryIntersections())
+			{
+				counter = 0;
+
+				for (const auto& i : Dune::intersections(gv, e))
+				{
+					if (i.boundary())
+					{
+						globalCounter++;
+						int index = indexSet.subIndex(e, counter, 1);
+						totalIndexSet.push_back(index);
+
+						if (i.centerUnitOuterNormal() * up >= 0.5)
+						{
+							partialIndexSet.push_back(index);
+							std::cout << "testIndex: " << index << '\n';
+						}
+					}
+					counter++;
+				}
+			}
+		}
+
+		std::cout << "GlobalCounter: " << globalCounter << '\n';
+	}
+
+//	totalIndexSet.reserve(gridManager.grid().size(dim));
+//	const unsigned size = gridManager.grid().size(dim);
+//
+//	for (int i = 0; i < size; i++)
+//	{
+//		totalIndexSet.push_back(i);
+//	}
+//
+//	/*std::cout << "TotalSize: " << totalIndexSet.size() << '\n';*/
+//
+//	std::vector<int> partialIndexSet;
+//
+//	counter = 0;
+//
+//	// check wether ids correspond to vertices
+//
+//	std::for_each(gridManager.grid().leafGridView().template begin<3>(),
+//			gridManager.grid().leafGridView().template end<3>(),
+//			[&partialIndexSet, &counter](const auto & it)
+//			{
+//				if(std::abs(it->geometry().center().operator[](2)-1.0) <= 1e-12 )
+//				{
+//					partialIndexSet.push_back(counter);
+//					std::cout << "Counter " << counter << '\n';
+//				}
+//				counter++;
+//			});
+
+//	std::stable_sort(partialIndexSet.begin(),partialIndexSet.end(), std::greater<int>());
+//	std::stable_sort(totalIndexSet.begin(),totalIndexSet.end(), std::greater<int>());
+
+	std::cout << "PartialSize: " << partialIndexSet.size() << '\n';
+
+	L2Space l2Space(gridManager, gridManager.grid().leafGridView(), order,
+			totalIndexSet, partialIndexSet);
+
+	ControlSpace controlSpace(&l2Space);
+	ControlVariableSetDescription controlDescription(controlSpace,
+	{ "u" });
+
+	ControlVariableSet u(controlDescription);
+	u = 0.0;
+
+	std::for_each(std::begin(boost::fusion::at_c<0>(u.data).coefficients()),
+			std::end(boost::fusion::at_c<0>(u.data).coefficients()),
+			[dim] (auto & entry)
+			{	entry[dim-1] = -100;});
+
+	std::cout << "USize:"
+			<< boost::fusion::at_c<0>(u.data).coefficients().size() << '\n';
+//
+//	for (unsigned i = 0;
+//			i < boost::fusion::at_c<0>(u.data).coefficients().size(); i++)
+//	{
+//		boost::fusion::at_c<0>(u.data).coefficients()[i][2] = -100;
+//	}
+
+// Creating material function
+	using Matrix = Dune::FieldMatrix<double,dim,dim>;
+
+	auto y00 = FunG::LinearAlgebra::unitMatrix<Matrix>();
+	auto refIntegrand = FunG::compressibleMooneyRivlin<FunG::Pow<2>, FunG::LN,
+			Matrix>(100, 100, 1, -1, y00);
+
+	using RefFunctional = NonlinearElasticityFunctionalDistributed<decltype(refIntegrand),RefVariableSetDescription,ControlVariableSet, decltype(gridManager)>;
+	using RefAssembler = VariationalFunctionalAssembler<LinearizationAt<RefFunctional> >;
+
+	auto FRef = RefFunctional(refIntegrand, reference_force_density,
+			referenceNormalComplianceParameter, u, gridManager);
+
+	RefAssembler assemblerRef(gridManager, spacesRef);
+
+	/*   VariableSetRef reference_deformation(descriptionRef);
+	 reference_deformation.read(init.begin());*/
+
+	assemblerRef.assemble(linearization(FRef, y));
+
+	//  Spacy
+
+	auto domainRef =
+			Spacy::Kaskade::makeHilbertSpace<RefVariableSetDescription>(
+					spacesRef,
+					{ 0u });
+	auto f = Spacy::Kaskade::makeC2Functional(FRef, domainRef);
+
+	using FTypeRef = Spacy::Kaskade::C2Functional<RefFunctional>;
+	using FLinRef = typename Spacy::Kaskade::C2Functional<RefFunctional>::Linearization;
+
+	using X0 = Dune::BlockVector<Dune::FieldVector<double,dim>>;
+	using NMatrix = NumaBCRSMatrix<Dune::FieldMatrix<double,dim,dim>>;
+
+	NMatrix Amat(assemblerRef.template get<0, 0>(), true);
+
+	auto mg = makeBPX(Amat, gridManager);
+
+	std::function<Spacy::LinearSolver(const FLinRef&)> precond =
+			[&mg](const FLinRef& f)
+			{
+				return Spacy::makeTCGSolver(f,Spacy::Kaskade::makePreconditioner<typename FTypeRef::VariableSetDescription,typename FTypeRef::VariableSetDescription>(f.range(),f.domain(),mg));
+			};
+
+	// compute solution by ACR
+
+	f.setSolverCreator(precond);
+	Spacy::ACR::ACRSolver solver(f);
+	auto resultRef = solver();
+
+	VariableSetRef reference_deformation(descriptionRef);
+	Spacy::Kaskade::copy(resultRef, reference_deformation);
+
+	IoOptions optionsRef;
+	optionsRef.outputType = IoOptions::ascii;
+
+	std::string outfilenameRef("ReferenceDeformation");
+	writeVTKFile(gridManager.grid().leafGridView(), reference_deformation,
+			outfilenameRef, optionsRef, 1);
+
+//	 std::for each
+//
+//
+//	unsigned int counter = 0;
+//
+//	Dune::HierarchicSearch<Grid, typename Grid::LeafIndexSet> hierSearch(
+//			gridManager.grid(), gridManager.grid().leafGridView().indexSet());
+//
+//	auto first = gridManager.grid().leafGridView().template begin<3>();
+//	auto last = gridManager.grid().leafGridView().template end<3>();
+//
+//	auto & indexSet = gridManager.grid().leafGridView().indexSet();
+//
+//	// Optimize  use iterator for vector as well use references
+//
+//	std::cout << "TestIndex: " << '\n';
+//
+//	for (auto it = first; it != last; ++(it), ++counter)
+//	{
+//		const auto & myCell_ = hierSearch.findEntity(it->geometry().center());
+//		bool test = true;
+//
+//		for (int i = 0; i <= 3; i++)
+//		{
+//
+//			if (myCell_.geometry().corner(i) == it->geometry().center())
+//			{
+//
+//				if (counter != indexSet.subIndex(myCell_, i, dim))
+//					test = false;
+//			}
+//		}
+//
+//		if (!test)
+//		{
+//			std::cout << "IndexFail" << '\n';
+//			break;
+//		}
+//
+//	}
+//
+// Is GridManager Changed ??
+// Get ReferenceDeformation
+//auto reference_deformation = setupFactory<dim, ProblemParameters, Grid,  ::Kaskade::GridManager<Grid>,  Vector>(parameters, gridManager, reference_force_density );
+
+// Define Spaces
+//	using H1Space = FEFunctionSpace<ContinuousLagrangeMapper<double,Grid::LeafGridView> >;
+//	using ConstantControlSpace = FEFunctionSpace<ConstantMapper<double,Grid::LeafGridView> >;
+//	using Spaces = boost::fusion::vector<H1Space const*,ConstantControlSpace const *, H1Space const *>;
+//
+//	using VariableDescriptions = boost::fusion::vector<Variable<SpaceIndex<0>,Components<3>,VariableId<stateId> >,
+//	Variable<SpaceIndex<1>,Components<3>,VariableId<controlId> > ,
+//	Variable<SpaceIndex<2>,Components<3>,VariableId<adjointId> > >;
+//
+//	using VariableSetDescription = VariableSetDescription<Spaces,VariableDescriptions>;
+//	using VariableSet = VariableSetDescription::VariableSet;
+//
+//	// Create Spaces
+//	H1Space deformationSpace(gridManager, gridManager.grid().leafGridView(),
+//			order);
+//	H1Space adjointState(gridManager, gridManager.grid().leafGridView(), order);
+//
+//	ConstantControlSpace controlSpace(gridManager,
+//			gridManager.grid().leafGridView(), 0);
+//
+//	Spaces spaces(&deformationSpace, &controlSpace, &adjointState);
+//	std::string names[3] =
+//	{ "y", "u", "p" };
+//
+//	VariableSetDescription description(spaces, names);
+//	VariableSet x(description);
+//
+//	// Control not threedimensional
+//	/*    std::cout << "Degrees of Freedom Control: " << description.degreesOfFreedom(1,2) << std::endl;*/
+//
+//	using Matrix = Dune::FieldMatrix<double,dim,dim>;
+//
+//	auto y0 = FunG::LinearAlgebra::unitMatrix<Matrix>();
+//	auto integrand = FunG::compressibleMooneyRivlin<FunG::Pow<2>, FunG::LN,
+//			Matrix>(100, 100, 1, -1, y0);
+//
+//	using Functional = NonlinearElasticityFunctionalControl<decltype(integrand),VariableSetDescription>;
+////	using ParamFunctional = ParameterFunctional<decltype(integrand),VariableSetDescription>;
+//
+//	auto F = Functional(integrand);
+////	auto ParamF = ParamFunctional(integrand);
+//
+//	auto domain = Spacy::Kaskade::makeHilbertSpace<VariableSetDescription>(
+//			spaces,
+//			{ 0u, 1u },
+//			{ 2u });
+//	std::cout << "Created Domain" << std::endl;
+//
+//	/*	auto c1 = Spacy::Kaskade::makeC1Operator(ParamF, domain);
+//	 c1.setSolverCreator(precond);*/
+//
+////   // Normal step functional with direct solver
+//	auto integrand2 = FunG::compressibleMooneyRivlin<FunG::Pow<2>, FunG::LN,
+//			Matrix>(100, 100, 1, -1, y0);
+//
+//	double normalComplianceParameter = initialNormalComplianceParameter;
+//
+//	auto fn = Spacy::Kaskade::makeC2Functional(
+//			NormalStepFunctional<decltype(integrand2),
+//					decltype(reference_deformation), stateId, controlId,
+//					adjointId, double, VariableSetDescription>(regularization,
+//					reference_deformation, integrand2,
+//					normalComplianceParameter), domain);
+//
+//	using NSF_type = NormalStepFunctional<decltype(integrand), decltype(reference_deformation), stateId,controlId,adjointId,double,VariableSetDescription>;
+//	using FN_type = Spacy::Kaskade::C2Functional<NSF_type>;
+//	using FNLin = FN_type::Linearization;
+//
+//	std::function<Spacy::LinearSolver(const FNLin&)> myPCG2SolverCreator =
+//			[&description](const FNLin& f)
+//			{
+//				Spacy::Kaskade::DirectBlockPreconditioner<NSF_type> P(f.A(),description,f.domain(),f.range());
+//				return Spacy::makeTCGSolver( f , P);
+//			};
+//
+////	fn.setSolverCreator(myPCG2SolverCreator);
+//
+//	auto ft = Spacy::Kaskade::makeC2Functional(
+//			TangentialStepFunctional<decltype(integrand2),
+//					decltype(reference_deformation), stateId, controlId,
+//					adjointId, double, VariableSetDescription>(regularization,
+//					reference_deformation, integrand2,
+//					normalComplianceParameter), domain);
+//
+//	std::cout << "set up solver" << std::endl;
+//	// algorithm and parameters
+//	auto cs = Spacy::CompositeStep::AffineCovariantSolver(fn, ft, domain);
+//	cs.setRelativeAccuracy(desiredAccuracy);
+//	cs.setEps(eps);
+//	cs.setVerbosityLevel(2);
+//	cs.setMaxSteps(maxSteps);
+//	cs.setIterativeRefinements(iterativeRefinements);
+//	cs.setDesiredContraction(desContr);
+//	cs.setRelaxedDesiredContraction(relDesContr);
+//	cs.setMaximalContraction(maxContr);
+//
+//	auto path = Spacy::PathFollowing::ClassicalContinuation(
+//			initialNormalComplianceParameter, maxNormalComplianceParameter);
+//
+//	std::function<
+//			std::tuple<bool, ::Spacy::Vector, ::Spacy::Real>(
+//					const ::Spacy::Vector & x, ::Spacy::Real lambda,
+//					const ::Spacy::Real & theta)> solveFunction =
+//			[desiredAccuracy, eps, maxSteps, iterativeRefinements, desContr, relDesContr, maxContr, &fn, &ft, &domain, &cs] (const ::Spacy::Vector & x, ::Spacy::Real lambda, const ::Spacy::Real & theta) /*mutable*/
+//			{
+//
+////				using boost::typeindex::type_id_with_cvr;
+//
+//				// Necessary because ft is casted to Spacy::C2Functional
+//				ft.updateParam(get(lambda));
+//				fn.updateParam(get(lambda));
+//
+//				cs.setNormalFunctional(fn);
+//				cs.setTangentialFunctional(ft);
+//				/*auto cs = Spacy::CompositeStep::AffineCovariantSolver(fn, ft, domain);*/
+//
+////				cs.setRelativeAccuracy(desiredAccuracy);
+////				cs.setEps(eps);
+////				cs.setVerbosityLevel(2);
+////				cs.setMaxSteps(maxSteps);
+////				cs.setIterativeRefinements(iterativeRefinements);
+////				cs.setDesiredContraction(desContr);
+////				cs.setRelaxedDesiredContraction(relDesContr);
+////				cs.setMaximalContraction(maxContr);
+//				/*auto bol = cs.getNormalFunctional().returnFunctions();*/
+////				std::cout << "Type: " << type_id_with_cvr<decltype(bol)>().pretty_name() << std::endl;
+//				/*		cs.getTangentialFunctional().paramUpdate(Spacy::get(lambda));*/
+//				return cs.solvePath(x, lambda, theta );
+//			};
+//
+//	std::function<void(const ::Spacy::Vector & solution, unsigned int step)> plotFunction =
+//			[&gridManager,&x, order ] (const ::Spacy::Vector & solution, unsigned int step)
+//			{
+//				Spacy::Kaskade::copy(solution, x);
+//				IoOptions options;
+//				options.outputType = IoOptions::ascii;
+//				std::string name = "Deformation_" + std::to_string(step);
+//				std::string outfilename(name);
+//				writeVTKFile(gridManager.grid().leafGridView(), x, outfilename, options,
+//						order);
+//			};
+//
+//	path.setSolver(solveFunction);
+//	path.setPlot(plotFunction);
+//
+//	auto result = path.solve(Spacy::zero(domain));
+//
+////		std::cout << "start solver" << std::endl;
+////		using namespace std::chrono;
+////		auto startTime = high_resolution_clock::now();
+////		auto result = cs();
+////		std::cout << "computation time: " << duration_cast < seconds
+////				> (high_resolution_clock::now() - startTime).count() << "s."
+////						<< std::endl;
+////
+//	Spacy::Kaskade::copy(result, x);
+////
+////	IoOptions options;
+////	options.outputType = IoOptions::ascii;
+////	std::string name = "Deformation";
+////	std::string outfilename(name);
+////	writeVTKFile(gridManager.grid().leafGridView(), x, outfilename, options,
+////			order);
+
+}
+

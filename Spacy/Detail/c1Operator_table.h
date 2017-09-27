@@ -17,51 +17,49 @@ namespace Spacy
         struct Table
         {
             using call_const_Vector_ref_function =
-                Vector ( * )( const clang::type_erasure::SBOStorage< 16 >&, const Vector& );
+                Vector ( * )( const clang::type_erasure::Storage&, const Vector& );
             call_const_Vector_ref_function call_const_Vector_ref;
-            using d1_const_Vector_ref_const_Vector_ref_function = Vector ( * )(
-                const clang::type_erasure::SBOStorage< 16 >&, const Vector&, const Vector& );
+            using d1_const_Vector_ref_const_Vector_ref_function =
+                Vector ( * )( const clang::type_erasure::Storage&, const Vector&, const Vector& );
             d1_const_Vector_ref_const_Vector_ref_function d1_const_Vector_ref_const_Vector_ref;
             using linearization_const_Vector_ref_function =
-                LinearOperator ( * )( const clang::type_erasure::SBOStorage< 16 >&, const Vector& );
+                LinearOperator ( * )( const clang::type_erasure::Storage&, const Vector& );
             linearization_const_Vector_ref_function linearization_const_Vector_ref;
-            using domain_function =
-                const VectorSpace& (*)( const clang::type_erasure::SBOStorage< 16 >& );
+            using domain_function = const VectorSpace& (*)( const clang::type_erasure::Storage& );
             domain_function domain;
-            using range_function =
-                const VectorSpace& (*)( const clang::type_erasure::SBOStorage< 16 >& );
+            using range_function = const VectorSpace& (*)( const clang::type_erasure::Storage& );
             range_function range;
         };
 
         template < class Interface, class Impl >
         struct execution_wrapper
         {
-            static Vector call_const_Vector_ref( const clang::type_erasure::SBOStorage< 16 >& data,
+            static Vector call_const_Vector_ref( const clang::type_erasure::Storage& data,
                                                  const Vector& x )
             {
                 return data.template get< Impl >().operator()( x );
             }
 
             static Vector
-            d1_const_Vector_ref_const_Vector_ref( const clang::type_erasure::SBOStorage< 16 >& data,
+            d1_const_Vector_ref_const_Vector_ref( const clang::type_erasure::Storage& data,
                                                   const Vector& x, const Vector& dx )
             {
                 return data.template get< Impl >().d1( x, dx );
             }
 
             static LinearOperator
-            linearization_const_Vector_ref( const clang::type_erasure::SBOStorage< 16 >& data,
+            linearization_const_Vector_ref( const clang::type_erasure::Storage& data,
                                             const Vector& x )
             {
                 return data.template get< Impl >().linearization( x );
             }
 
-            static const VectorSpace& domain( const clang::type_erasure::SBOStorage< 16 >& data )
+            static const VectorSpace& domain( const clang::type_erasure::Storage& data )
             {
                 return data.template get< Impl >().domain();
             }
 
-            static const VectorSpace& range( const clang::type_erasure::SBOStorage< 16 >& data )
+            static const VectorSpace& range( const clang::type_erasure::Storage& data )
             {
                 return data.template get< Impl >().range();
             }

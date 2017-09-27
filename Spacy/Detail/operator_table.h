@@ -17,31 +17,29 @@ namespace Spacy
         struct Table
         {
             using call_const_Vector_ref_function =
-                Vector ( * )( const clang::type_erasure::SBOStorage< 16 >&, const Vector& );
+                Vector ( * )( const clang::type_erasure::Storage&, const Vector& );
             call_const_Vector_ref_function call_const_Vector_ref;
-            using domain_function =
-                const VectorSpace& (*)( const clang::type_erasure::SBOStorage< 16 >& );
+            using domain_function = const VectorSpace& (*)( const clang::type_erasure::Storage& );
             domain_function domain;
-            using range_function =
-                const VectorSpace& (*)( const clang::type_erasure::SBOStorage< 16 >& );
+            using range_function = const VectorSpace& (*)( const clang::type_erasure::Storage& );
             range_function range;
         };
 
         template < class Interface, class Impl >
         struct execution_wrapper
         {
-            static Vector call_const_Vector_ref( const clang::type_erasure::SBOStorage< 16 >& data,
+            static Vector call_const_Vector_ref( const clang::type_erasure::Storage& data,
                                                  const Vector& x )
             {
                 return data.template get< Impl >().operator()( x );
             }
 
-            static const VectorSpace& domain( const clang::type_erasure::SBOStorage< 16 >& data )
+            static const VectorSpace& domain( const clang::type_erasure::Storage& data )
             {
                 return data.template get< Impl >().domain();
             }
 
-            static const VectorSpace& range( const clang::type_erasure::SBOStorage< 16 >& data )
+            static const VectorSpace& range( const clang::type_erasure::Storage& data )
             {
                 return data.template get< Impl >().range();
             }

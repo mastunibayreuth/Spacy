@@ -20,64 +20,57 @@ namespace Spacy
         struct Table
         {
             using call_const_Vector_ref_function =
-                Vector ( * )( const clang::type_erasure::SBOStorage< 16 >&, const Vector& );
+                Vector ( * )( const clang::type_erasure::Storage&, const Vector& );
             call_const_Vector_ref_function call_const_Vector_ref;
-            using call_const_LinearOperator_ref_function =
-                Real ( * )( const clang::type_erasure::SBOStorage< 16 >&,
-                            const clang::type_erasure::SBOStorage< 16 >& );
+            using call_const_LinearOperator_ref_function = Real ( * )(
+                const clang::type_erasure::Storage&, const clang::type_erasure::Storage& );
             call_const_LinearOperator_ref_function call_const_LinearOperator_ref;
             using add_const_LinearOperator_ref_function =
-                Interface& (*)( Interface&, clang::type_erasure::SBOStorage< 16 >&,
-                                const clang::type_erasure::SBOStorage< 16 >& );
+                Interface& (*)( Interface&, clang::type_erasure::Storage&,
+                                const clang::type_erasure::Storage& );
             add_const_LinearOperator_ref_function add_const_LinearOperator_ref;
             using subtract_const_LinearOperator_ref_function =
-                Interface& (*)( Interface&, clang::type_erasure::SBOStorage< 16 >&,
-                                const clang::type_erasure::SBOStorage< 16 >& );
+                Interface& (*)( Interface&, clang::type_erasure::Storage&,
+                                const clang::type_erasure::Storage& );
             subtract_const_LinearOperator_ref_function subtract_const_LinearOperator_ref;
             using multiply_double_function = Interface& (*)( Interface&,
-                                                             clang::type_erasure::SBOStorage< 16 >&,
+                                                             clang::type_erasure::Storage&,
                                                              double );
             multiply_double_function multiply_double;
-            using negate_function = Interface ( * )( const clang::type_erasure::SBOStorage< 16 >& );
+            using negate_function = Interface ( * )( const clang::type_erasure::Storage& );
             negate_function negate;
-            using compare_const_LinearOperator_ref_function =
-                bool ( * )( const clang::type_erasure::SBOStorage< 16 >&,
-                            const clang::type_erasure::SBOStorage< 16 >& );
+            using compare_const_LinearOperator_ref_function = bool ( * )(
+                const clang::type_erasure::Storage&, const clang::type_erasure::Storage& );
             compare_const_LinearOperator_ref_function compare_const_LinearOperator_ref;
             using solver_function = std::function< Vector( const Vector& ) > ( * )(
-                const clang::type_erasure::SBOStorage< 16 >& );
+                const clang::type_erasure::Storage& );
             solver_function solver;
-            using domain_function =
-                const VectorSpace& (*)( const clang::type_erasure::SBOStorage< 16 >& );
+            using domain_function = const VectorSpace& (*)( const clang::type_erasure::Storage& );
             domain_function domain;
-            using range_function =
-                const VectorSpace& (*)( const clang::type_erasure::SBOStorage< 16 >& );
+            using range_function = const VectorSpace& (*)( const clang::type_erasure::Storage& );
             range_function range;
-            using space_function =
-                const VectorSpace& (*)( const clang::type_erasure::SBOStorage< 16 >& );
+            using space_function = const VectorSpace& (*)( const clang::type_erasure::Storage& );
             space_function space;
         };
 
         template < class Interface, class Impl >
         struct execution_wrapper
         {
-            static Vector call_const_Vector_ref( const clang::type_erasure::SBOStorage< 16 >& data,
+            static Vector call_const_Vector_ref( const clang::type_erasure::Storage& data,
                                                  const Vector& x )
             {
                 return data.template get< Impl >().operator()( x );
             }
 
-            static Real
-            call_const_LinearOperator_ref( const clang::type_erasure::SBOStorage< 16 >& data,
-                                           const clang::type_erasure::SBOStorage< 16 >& x )
+            static Real call_const_LinearOperator_ref( const clang::type_erasure::Storage& data,
+                                                       const clang::type_erasure::Storage& x )
             {
                 return data.template get< Impl >().operator()( x.template get< Impl >() );
             }
 
-            static Interface&
-            add_const_LinearOperator_ref( Interface& interface,
-                                          clang::type_erasure::SBOStorage< 16 >& data,
-                                          const clang::type_erasure::SBOStorage< 16 >& y )
+            static Interface& add_const_LinearOperator_ref( Interface& interface,
+                                                            clang::type_erasure::Storage& data,
+                                                            const clang::type_erasure::Storage& y )
             {
                 data.template get< Impl >().operator+=( y.template get< Impl >() );
                 return interface;
@@ -85,50 +78,48 @@ namespace Spacy
 
             static Interface&
             subtract_const_LinearOperator_ref( Interface& interface,
-                                               clang::type_erasure::SBOStorage< 16 >& data,
-                                               const clang::type_erasure::SBOStorage< 16 >& y )
+                                               clang::type_erasure::Storage& data,
+                                               const clang::type_erasure::Storage& y )
             {
                 data.template get< Impl >().operator-=( y.template get< Impl >() );
                 return interface;
             }
 
             static Interface& multiply_double( Interface& interface,
-                                               clang::type_erasure::SBOStorage< 16 >& data,
-                                               double a )
+                                               clang::type_erasure::Storage& data, double a )
             {
                 data.template get< Impl >().operator*=( std::move( a ) );
                 return interface;
             }
 
-            static Interface negate( const clang::type_erasure::SBOStorage< 16 >& data )
+            static Interface negate( const clang::type_erasure::Storage& data )
             {
                 return data.template get< Impl >().operator-();
             }
 
-            static bool
-            compare_const_LinearOperator_ref( const clang::type_erasure::SBOStorage< 16 >& data,
-                                              const clang::type_erasure::SBOStorage< 16 >& y )
+            static bool compare_const_LinearOperator_ref( const clang::type_erasure::Storage& data,
+                                                          const clang::type_erasure::Storage& y )
             {
                 return data.template get< Impl >().operator==( y.template get< Impl >() );
             }
 
             static std::function< Vector( const Vector& ) >
-            solver( const clang::type_erasure::SBOStorage< 16 >& data )
+            solver( const clang::type_erasure::Storage& data )
             {
                 return data.template get< Impl >().solver();
             }
 
-            static const VectorSpace& domain( const clang::type_erasure::SBOStorage< 16 >& data )
+            static const VectorSpace& domain( const clang::type_erasure::Storage& data )
             {
                 return data.template get< Impl >().domain();
             }
 
-            static const VectorSpace& range( const clang::type_erasure::SBOStorage< 16 >& data )
+            static const VectorSpace& range( const clang::type_erasure::Storage& data )
             {
                 return data.template get< Impl >().range();
             }
 
-            static const VectorSpace& space( const clang::type_erasure::SBOStorage< 16 >& data )
+            static const VectorSpace& space( const clang::type_erasure::Storage& data )
             {
                 return data.template get< Impl >().space();
             }

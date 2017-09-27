@@ -1,0 +1,28 @@
+include /home/bt304332/svn-repos/Kaskade7.3/Makefile.Local
+include /home/bt304332/svn-repos/Kaskade7.3/Makefile.Rules
+
+
+
+INCLUDE = $(DUNEINC) $(UGINC) $(BOOSTINC) $(KASKADEINC) $(UMFPACKINC) -I/home/bt304332/git-repos/FunG -I/home/bt304332/git-repos/UpdateSpacy 
+FLAGS = $(WFLAGS) $(OPTFLAGS)
+
+SPACYLIB = -L/home/bt304332/git-repos/UpdateSpacy/build/Spacy -lspacy
+
+run: nonlinear_elasticity.o Makefile $(KASKADE7)/libs/libkaskade.a 
+	$(CXX) $(FLAGS) $< $(KASKADE7)/libs/umfpack_solve.o $(KASKADELIB) \
+ $(DUNELIB) \
+ $(UGLIB) \
+ $(BOOSTLIB) \
+  -lpthread \
+ $(UMFPACKLIB) \
+ $(BLASLIB) $(FTNLIB) $(NUMALIB) $(SPACYLIB) -o $@
+
+SPACYLIB = -L/home/bt304332/git-repos/UpdateSpacy/build/Spacy -lspacy
+
+clean:
+	rm -f gccerr.txt run nonlinear_elasticity.o  *.bak *.vtu
+
+depend:
+	cp Makefile.gen Makefile; /home/bt304332/svn-repos/Kaskade7.3/gccmakedep -f Makefile $(INCLUDE) $(MAKEDEPENDFLAGS)  nonlinear_elasticity.cpp; #/home/lars/Libraries/Kaskade7.3/remove_install_deps Makefile
+
+# DO NOT DELETE

@@ -37,7 +37,7 @@ namespace Spacy
              * @brief Constructor.
              * @param f functional to minimize
              */
-            ACRSolver(C2Functional f, double eta1 = 0.25, double eta2 = 0.5, double epsilon = 1e-4, double relativeAccuracy = 1e-4, double omegaMax = 1e8,  double lambdaMax = 2e-2);
+            ACRSolver(C2Functional f, double eta1 = 0.25, double eta2 = 0.5, double epsilon = 1e-10, double relativeAccuracy = 1e-4, double omegaMax = 1e25,  double lambdaMin = 1e-10);
 
             /// Compute solution starting at \f$x_0=0\f$.
             Vector operator()();
@@ -48,13 +48,45 @@ namespace Spacy
              */
             Vector operator()(const Vector& x0);
 
+
+            /**
+             * @brief Compute solution for a parameter-dependent system.
+             * @param x0 initial iterate
+             */
+            std::tuple<bool, Vector, Real, Real> solveParam(
+                            const Vector & x0, const Real & lambda, const Real & thetaGlobal);
+
+
+
+            /**
+             * @brief Set nonlinear update function
+             */
+            void setNonlinUpdate(std::function<void(const Vector & x,  Vector& dx)> nonlinUpdate);
+
+
+            /**
+            * @brief Set nonlinear update function
+                       */
+             void setOutput(std::function<void(const  Vector& dx)> outputUpdate);
+
+             /**
+             * @brief Get C2Functional
+                        */
+              C2Functional & getFunctional();
+
+              /**
+              * @brief Test if ACR converged
+                         */
+              bool converged() const;
+
+
         private:
             
             /**
              * @brief Compute correction dx.
              * @param x current iterate
              */
-            Vector computeStep(const Vector& x) const;
+             std::tuple<Vector,Real> computeStep(const Vector& x) const;
 
             /**
              * @brief Test if dx is an acceptable correction.
@@ -76,9 +108,12 @@ namespace Spacy
             StepMonitor stepMonitor = StepMonitor::Accepted;
             
             // epsilon_ termination criterion
-            const double eta1_, eta2_, epsilon_, omegaMax_,  lambdaMax_;
-            Real rho_ = 1;
+            const double eta1_, eta2_, epsilon_, omegaMax_,  lambdaMin_;
+            Real rho_ = 1.0;
             Real omega_ = 1e-6;
+            std::function<void(Vector & x,  Vector& dx)>  nonlinUpdate_ = [](Vector & x,  Vector& dx){return;};
+            std::function<void(const  Vector& dx)> output_ = []( const Vector& dx){return;};
+            mutable bool converged_ = false;
         };
     }
 }

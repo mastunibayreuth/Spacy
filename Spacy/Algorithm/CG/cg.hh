@@ -79,6 +79,12 @@ namespace Spacy
 
 
       /**
+            * @param x initial guess
+            * @param b right hand side
+            */
+      std::tuple<Vector, Real> solveNorm(const Vector& x, const Vector& b) const;
+
+      /**
        * @brief Set a new termination criterion which must satisfy the @ref CG_TerminationCriterionConceptAnchor "TerminationCriterionConcept".
        * @param newTerminate new termination criterion
        */
@@ -126,6 +132,9 @@ namespace Spacy
     private:
       /// CG Implementation.
       Vector cgLoop (Vector x, Vector r) const;
+
+      /// CG Implementation which returns the solution and its preconditioner norm
+      std::tuple<Vector,Real> cgLoopNorm(Vector x, Vector r) const;
 
       /// Apply preconditioner.
       Vector Q(const Vector& r) const;

@@ -159,7 +159,7 @@ namespace Spacy
 
     private:
         LinearOperatorDetail::Table< LinearOperator > function_;
-        clang::type_erasure::SBOStorage< 16 > impl_;
+        clang::type_erasure::Storage impl_;
     };
     /// Access solver via A^-1. Throws for k!=-1.
     inline LinearSolver operator^( const LinearOperator& A, int k )
@@ -174,7 +174,7 @@ namespace Spacy
     inline LinearSolver operator^( LinearOperator&& A, int k )
     {
         if ( k == -1 )
-            return A.solver();
+            return std::move( A.solver() );
         throw Exception::InvalidArgument(
             "operator^ for LinearOperator only defined for exponent: k = -1." );
     }
