@@ -3,7 +3,8 @@
 
 #include "pathfollowing.hh"
 
-#include "Spacy/Util/Exceptions/singularOperatorException.hh"
+#include "Spacy/Util/Exceptions/notConvergedException.hh"
+#include "Spacy/Util/Exceptions/invalidArgumentException.hh"
 #include "Spacy/vector.hh"
 #include <Spacy/Util/log.hh>
 #include <algorithm>
@@ -35,7 +36,7 @@ void ClassicalContinuation::setSolver(
 				std::tuple<bool, Vector, Real, Real>(const Vector & x,
 						const Real & lambda, const Real & theta)> f)
 {
-	solveNewton_ = std::move(f);
+    innerSolver_ = std::move(f);
 }
 
 void ClassicalContinuation::setFirstStepSolver(
@@ -64,125 +65,130 @@ Vector ClassicalContinuation::solve(const Vector & x0) const
 	auto x = x0;
 	auto x_next = x;
 
-
-	auto s = initialStepSize_;
+    auto stepsize = initialStepSize_;
 
 	bool converged = false;
 	const int maxIt = getMaxSteps();
 
-	//std::tie(converged, x, theta, thetaZero) = solveNewton_(x, lambda, theta_);
-	std::tie(converged, x) =  solveFirstStep_(x,lambda);
-	plot_(x, 0);
-	if (!converged)
-	{
-		std::cout << "No convergence for initial iterate x0 " << '\n';
-		return x;
-		//        		throw Exception::NotConverged("Newton"); //change
-	}
+    testSetup(lambdaInit_, initialStepSize_, x);
 
-
-	if (lambda + s > lambdaMax_)
-	{
-		std::cout << "Initial stepsize to large: " << '\n';
-		return x;
-	}
-
-	for (int i = 1; i <= maxIt; i++)
+    for (int step = 1; step <= maxIt; step++)
 	{
                 LOG_SEPARATOR(log_tag);
-                LOG(log_tag, "Iteration", i)
-		LOG(log_tag, "stepsize", s, "lambda", lambda)
+                LOG(log_tag, "Iteration", step)
+        LOG(log_tag, "stepsize", stepsize, "lambda", lambda)
 		LOG(log_tag, "|x|", norm(x))
 
-                // leaves loop before check wether lambda max has been reached write in different function
 		do
 		{
+            auto lambda_next = lambda + stepsize;
 
+                        std::tie(converged, x_next, theta, thetaZero) =
+                                innerSolver_(x, lambda_next, theta_);
 
-			auto lambda_next = lambda + s;
-
-
-			std::tie(converged, x_next, theta, thetaZero) = solveNewton_(x,
-					lambda_next, theta_);
-
-
-
-			// Kill one if condition
-			if(converged)
-			{
-                                std::cout << "Converged: For s = " << s << std::endl;
-				std::cout << "Theta: " << theta << std::endl;
-                                //s *= lowerBound_/(sqrt(1.0+4.0*thetaZero)-1.0);
-                                if(thetaZero <= thetaMin_)
-                                    s *= lowerBound_/(2.0*thetaMin_);
-                                 else
-                                    s *= lowerBound_/(2.0*thetaZero);
-
-
-			}
-
-			else
-			{
-				std::cout << "Theta: " << theta << std::endl;
-				s *= lowerBound_/(sqrt(1.0+4.0*theta)-1.0);
-			}
-
-//			if(theta > thetaMin_)
-//				s *= (sqrt(1.0+4.0*theta_)-1.0)/(2.0*theta);
-//
-//			else
-//   			s *= (sqrt(1.0+4.0*theta_)-1.0)/(2.0*thetaMin_);
-
-
-//			s *= (lowerBound_)/(theta);
+            stepsize = updateStepSize(converged, step, theta,thetaZero, stepsize, x);
 
 			if(converged)
 			{
 				x = x_next;
                                 std::cout << "Converged:  For lambda:  " << lambda << std::endl;
 				lambda = lambda_next;
-                                std::cout << "  LambdaAfterUpdate " << lambda  << std::endl;
+                                std::cout << "  LambdaAfterUpdate "      << lambda << std::endl;
 			}
 
-			s = std::min(s, lambdaMax_ -lambda);
-//			s = std::min(s, lambdaMax_ - lambda_next);
+            stepsize = std::min(stepsize, lambdaMax_ -lambda);
 
-		} while (!converged && s > minStepSize_);
+        } while (!converged && stepsize > minStepSize_);
 
+         converged = testResult(converged, step, lambda, stepsize,  x);
 
-		if (!converged)
-		{
-			std::cout << "No convergence" << '\n';
-			return x;
-		}
+          LOG_SEPARATOR(log_tag);
 
-		plot_(x, i);
-                //Not well implemented
-		if (lambda == lambdaMax_)
-				{
-					result_ = Result::Converged;
-					std::cout << "Convergence " << '\n';
+          if(converged)
+                 return x;
 
-					LOG(log_tag, "stepsize", s, "lambda", lambda)
-					LOG(log_tag, "|x|", norm(x))
-
-					return x;
-				}
-
-		// not good
-		 if (s < minStepSize_)
-		{
-			std::cout << "Stepsize too small" << '\n';
-			return x;
-		}
-
-
-		
-		 LOG_SEPARATOR(log_tag);
 	}
-	std::cout << "Reached max number of iterations " << '\n';
-	return x;
+    throw Exception::NotConverged("Max number of steps reached");
+    return x;
 }
 
+void ClassicalContinuation::testSetup(Real lambda, Real stepsize, Vector & x) const
+{
+    bool converged = false;
+
+    if (lambda + stepsize > lambdaMax_ )
+    {
+        throw Exception::InvalidArgument("Initial stepsize for pathfollowing too large");
+    }
+
+    else if(lambda < minStepSize_)
+    {
+       throw Exception::InvalidArgument("Initial stepsize smaller than minstepsize");
+    }
+
+    std::tie(converged, x) = solveFirstStep_(x,lambda);
+
+    if(!converged)
+    {
+        throw Exception::NotConverged("Computation of initial iterate for path following");
+    }
+
+     plot_(x, 0);
+}
+
+
+bool ClassicalContinuation::testResult(bool converged, int step, Real lambda, Real stepsize, const Vector & x) const
+{
+    if (!converged)
+      throw Exception::NotConverged("Computation of initial iterate for path following");
+
+    if (lambda == lambdaMax_)
+    {
+        plot_(x, step);
+        result_ = Result::Converged;
+        LOG(log_tag, "stepsize", stepsize, "lambda", lambda)
+        LOG(log_tag, "|x|", norm(x))
+        return true;
+     }
+
+    else if(stepsize < minStepSize_)
+    {
+         throw Exception::NotConverged("Minimum stepsize without convergence reached");
+    }
+
+    return false;
+
+}
+
+Real ClassicalContinuation::updateStepSize(bool converged, int step, Real theta, Real thetaZero,Real stepsize_, const Vector & x) const
+{
+    auto stepsize = stepsize_;
+    if(converged)
+    {
+        std::cout << "Converged: For s = " << stepsize << std::endl;
+        std::cout << "Theta: " << theta << std::endl;
+                        if(thetaZero <= thetaMin_)
+                            stepsize *= lowerBound_/(2.0*thetaMin_);
+                         else
+                            stepsize *= lowerBound_/(2.0*thetaZero);
+    }
+
+    else
+    {
+        std::cout << "No Convergence for Theta: " << theta << std::endl;
+        stepsize *= lowerBound_/(sqrt(1.0+4.0*theta)-1.0);
+    }
+
+    return stepsize;
+}
+//ClassicalContinuation::InnerSolver acr_to_inner_solver(const ::Spacy::C2Functional& f)
+//{
+//    return [&f](const Vector & x, Real lambda, const Real & theta)
+//    {
+//        f.updateParam(get(lambda));
+//        Spacy::ACR::ACRSolver acr(f);
+//        return acr.solveParam(x, lambda, theta );
+//    };
+//}
 }
 }
