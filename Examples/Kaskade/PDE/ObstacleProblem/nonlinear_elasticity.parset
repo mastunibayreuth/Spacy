@@ -2,7 +2,7 @@
 
 
 order             = 1
-refinements       = 3
+refinements       = 5
 numberOfCubes = 7
 obstacle = -0.5
 
