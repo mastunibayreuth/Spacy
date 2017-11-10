@@ -294,6 +294,9 @@ int main(int argc, char *argv[])
 
     f.setSolverCreator(precond);
 
+
+
+  /*
 	auto path = Spacy::PathFollowing::ClassicalContinuation(
 			initialNormalComplianceParameter, maxNormalComplianceParameter);
 
@@ -337,6 +340,24 @@ int main(int argc, char *argv[])
 	path.setPlot(plotFunction);
 
     const auto result = path.solve(Spacy::zero(domainRef));
+
+
+    */
+
+    f.updateParam(maxNormalComplianceParameter);
+    Spacy::ACR::ACRSolver acr(f);
+    auto solution = acr();
+
+    Spacy::Kaskade::copy(solution, y);
+    IoOptions options;
+    options.outputType = IoOptions::ascii;
+    std::string outfilename = "Deformation_";
+
+    writeVTKFile(gridManager.grid().leafGridView(), y, outfilename, options,
+            order);
+
+
+
 
 
 
