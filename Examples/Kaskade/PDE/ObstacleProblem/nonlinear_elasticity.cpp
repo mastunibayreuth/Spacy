@@ -130,6 +130,7 @@ int main(int argc, char *argv[])
 	auto grid = createDefaultCuboidFactory<Grid>();
 	GridManager<Grid> gridManager(std::move(grid));
 	gridManager.globalRefine(refinements);
+    gridManager.enforceConcurrentReads(true);
 
 
 
