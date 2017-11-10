@@ -20,7 +20,7 @@ reference_boundary_force = -3
 #150000
 
 
-referenceNormalComplianceParameter = 0
+referenceNormalComplianceParameter =150000
 
 initialNormalComplianceParameter = 150000
 maxNormalComplianceParameter = 150000
