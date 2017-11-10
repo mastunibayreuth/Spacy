@@ -57,7 +57,7 @@
 #include <algorithm>
 #include <fem/forEach.hh>
 #include <linalg/apcg.hh>
-#include <fem/particle.hh>
+
 
 int main(int argc, char *argv[])
 {
