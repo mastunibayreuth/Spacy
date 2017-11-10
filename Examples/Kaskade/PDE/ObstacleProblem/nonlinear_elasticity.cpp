@@ -251,7 +251,7 @@ int main(int argc, char *argv[])
 					spacesRef,
 					{ 0u });
 	auto f = Spacy::Kaskade::makeC2Functional(FRef, domainRef);
-
+	f.setNumberOfThreads(20);
 	using FTypeRef = Spacy::Kaskade::C2Functional<RefFunctional>;
 	using FLinRef = typename Spacy::Kaskade::C2Functional<RefFunctional>::Linearization;
 
