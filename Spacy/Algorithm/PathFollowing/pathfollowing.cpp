@@ -12,6 +12,7 @@
 #include <cmath>
 #include <iostream>
 #include <utility>
+#include <limits>
 
 namespace Spacy
 {
@@ -65,7 +66,7 @@ Vector ClassicalContinuation::solve(const Vector & x0) const
 	auto x = x0;
 	auto x_next = x;
 
-    auto stepsize = initialStepSize_;
+        auto stepsize = initialStepSize_;
 
 	bool converged = false;
 	const int maxIt = getMaxSteps();
@@ -74,29 +75,29 @@ Vector ClassicalContinuation::solve(const Vector & x0) const
 
     for (int step = 1; step <= maxIt; step++)
 	{
+             stepsize = std::min(stepsize, lambdaMax_ -lambda);
                 LOG_SEPARATOR(log_tag);
                 LOG(log_tag, "Iteration", step)
-        LOG(log_tag, "stepsize", stepsize, "lambda", lambda)
+                 LOG(log_tag, "stepsize", stepsize, "lambda", lambda)
 		LOG(log_tag, "|x|", norm(x))
 
 		do
 		{
-            auto lambda_next = lambda + stepsize;
-
+            auto lambdaNext = lambda + stepsize;
+                    std::cout << "LambdaTry: " << std::endl << std::endl;
                         std::tie(converged, x_next, theta, thetaZero) =
-                                innerSolver_(x, lambda_next, theta_);
+                                innerSolver_(x, lambdaNext, theta_);
 
-            stepsize = updateStepSize(converged, step, theta,thetaZero, stepsize, x);
+            stepsize = updateStepSize(converged, step, theta,thetaZero, stepsize);
 
 			if(converged)
 			{
 				x = x_next;
-                                std::cout << "Converged:  For lambda:  " << lambda << std::endl;
-				lambda = lambda_next;
-                                std::cout << "  LambdaAfterUpdate "      << lambda << std::endl;
+                                std::cout << "Converged:  For lambda:  " << lambdaNext << std::endl;
+                                lambda = lambdaNext;
 			}
 
-            stepsize = std::min(stepsize, lambdaMax_ -lambda);
+
 
         } while (!converged && stepsize > minStepSize_);
 
@@ -114,19 +115,25 @@ Vector ClassicalContinuation::solve(const Vector & x0) const
 
 void ClassicalContinuation::testSetup(Real lambda, Real stepsize, Vector & x) const
 {
-    bool converged = false;
 
     if (lambda + stepsize > lambdaMax_ )
     {
         throw Exception::InvalidArgument("Initial stepsize for pathfollowing too large");
     }
 
-    else if(lambda < minStepSize_)
+    else if(stepsize < minStepSize_)
     {
        throw Exception::InvalidArgument("Initial stepsize smaller than minstepsize");
     }
 
-    std::tie(converged, x) = solveFirstStep_(x,lambda);
+    bool converged = false;
+    Real theta = 0.0;
+    Real thetaZero = 0.0;
+
+   // std::tie(converged, x) = solveFirstStep_(x,lambda);
+
+    std::tie(converged, x, theta, thetaZero) =
+            innerSolver_(x, lambda, std::numeric_limits<double>::max());
 
     if(!converged)
     {
@@ -139,10 +146,8 @@ void ClassicalContinuation::testSetup(Real lambda, Real stepsize, Vector & x) co
 
 bool ClassicalContinuation::testResult(bool converged, int step, Real lambda, Real stepsize, const Vector & x) const
 {
-    if (!converged)
-      throw Exception::NotConverged("Computation of initial iterate for path following");
 
-    if (lambda == lambdaMax_)
+    if (converged && lambda == lambdaMax_ )
     {
         plot_(x, step);
         result_ = Result::Converged;
@@ -150,6 +155,11 @@ bool ClassicalContinuation::testResult(bool converged, int step, Real lambda, Re
         LOG(log_tag, "|x|", norm(x))
         return true;
      }
+
+    if (!converged)
+      throw Exception::NotConverged("Computation of initial iterate for path following");
+
+
 
     else if(stepsize < minStepSize_)
     {
@@ -160,13 +170,13 @@ bool ClassicalContinuation::testResult(bool converged, int step, Real lambda, Re
 
 }
 
-Real ClassicalContinuation::updateStepSize(bool converged, int step, Real theta, Real thetaZero,Real stepsize_, const Vector & x) const
+Real ClassicalContinuation::updateStepSize(bool converged, int step, Real theta, Real thetaZero,Real stepsize_) const
 {
     auto stepsize = stepsize_;
     if(converged)
     {
         std::cout << "Converged: For s = " << stepsize << std::endl;
-        std::cout << "Theta: " << theta << std::endl;
+        std::cout << "Theta: " << theta << std::endl << std::endl;
                         if(thetaZero <= thetaMin_)
                             stepsize *= lowerBound_/(2.0*thetaMin_);
                          else

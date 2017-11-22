@@ -92,7 +92,7 @@ private:
    bool testResult(bool converged, int step, Real lambda, Real stepsize, const Vector & x) const;
 
    /// Test if algorithm converged
-   Real updateStepSize(bool converged, int step, Real theta, Real thetaZero, Real stepsize_, const Vector & x) const;
+   Real updateStepSize(bool converged, int step, Real theta, Real thetaZero, Real stepsize_) const;
 
 
 	/// Solve the Newton system for a fixed parameter
@@ -116,7 +116,7 @@ private:
 
 	/// Plot the solution \f$x(\lambda_{k})\f$ in each step
 	std::function<void(const Vector & x, unsigned int step)> plot_ =
-	{ };
+        [](const Vector & x, unsigned int step){ };
 
 	mutable Result result_ = Result::Failed;
 
