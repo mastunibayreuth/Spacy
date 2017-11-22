@@ -54,7 +54,7 @@ namespace Spacy
              * @param x0 initial iterate
              */
             std::tuple<bool, Vector, Real, Real> solveParam(
-                            const Vector & x0, const Real & lambda, const Real & thetaGlobal);
+                            const Vector & x0, Real lambda, Real thetaGlobal);
 
 
 
@@ -82,11 +82,7 @@ namespace Spacy
 
         private:
             
-            /**
-             * @brief Compute correction dx.
-             * @param x current iterate
-             */
-             std::tuple<Vector,Real> computeStep(const Vector& x) const;
+
 
             /**
              * @brief Test if dx is an acceptable correction.
@@ -102,6 +98,19 @@ namespace Spacy
              * @param omega weight Parameter of the cubic model
              */
             Real weightChange(::Spacy::Real omega) const;
+
+            /**
+             * @brief Compute correction dx.
+             * @param x current iterate
+             */
+            std::tuple<Vector,Real> computeStep(const Vector& x) const;
+
+
+            /**
+             * @brief Check if the contraction of the update dx is sufficiently small.
+             */
+            std::tuple<bool,Real,Real,Real,Real> checkContraction(int step, Real normDx,Real normDx1_, Real normDx2_, Real thetaZero_, Real thetaGlobal) const;
+
 
             C2Functional f_;
             const VectorSpace& domain_;

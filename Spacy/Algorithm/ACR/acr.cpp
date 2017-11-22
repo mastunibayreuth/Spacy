@@ -10,6 +10,7 @@
 #include <Spacy/zeroVectorCreator.hh>
 #include <Spacy/Util/cast.hh>
 #include <Spacy/Util/log.hh>
+#include "Spacy/Util/Exceptions/notConvergedException.hh"
 
 #include <cmath>
 #include <iostream>
@@ -83,7 +84,7 @@ Vector ACRSolver::operator()(const Vector& x0)
 		std::cout << std::setprecision(20) << "NormDxBeforeUpdate: " << norm(dx)
 				<< std::endl;
 
-//// make function
+
 		do
 		{
 
@@ -136,29 +137,26 @@ return x;
 
 
 std::tuple<bool, Vector, Real, Real> ACRSolver::solveParam(
-                const Vector & x0, const Real & lambda_, const Real & thetaGlobal)
+                const Vector & x0,  Real lambda_, Real thetaGlobal)
 {
-        std::cout << "StartIteration: " << std::endl;
-
-//	omegaC = 1e-6;
-//	omegaL =  Real(1e-16);
+        std::cout << "StartIteration: " << '\n';
 
         auto x = x0;
         auto dx = x;
 
-        Real theta = 1.0;
-        Real thetaZero = 0.25;
+        Real theta = 0.1;
+        Real thetaZero = 0.1;
 
-        Real norm_dx1 = 0.0;
-        Real norm_dx2 = 0.0;
+        Real normDx1 = 0.0;
+        Real normDx2 = 0.0;
 
-        Real norm_dx = 0.0;
+        Real normDx = 0.0;
         Real lambda = 1.0;
 
         Real dxQNorm = 0.0;
 
-
         converged_ = false;
+        bool contraction = false;
 
 
         // update penalty Parameter
@@ -168,25 +166,19 @@ std::tuple<bool, Vector, Real, Real> ACRSolver::solveParam(
         for (unsigned step = 1; step <= getMaxSteps(); ++step)
         {
 
-            LOG_SEPARATOR(log_tag);
+           LOG_SEPARATOR(log_tag);
            LOG(log_tag, "Iteration", step)
 
            stepMonitor = StepMonitor::Accepted;
            // TODO domain_.setScalarProduct( );
 
-
            std::tie(dx,dxQNorm) = computeStep(x);
 
-           norm_dx = sqrt(dxQNorm);
+           normDx = sqrt(dxQNorm);
 
-           std::cout << "DxQNorm: " << dxQNorm << std::endl;
+           std::cout << std::setprecision(20) << "DxQNorm: " << normDx << std::endl;
 
-
-           std::cout << "Test wether dx is a direction of descent :" << f_(x + dx*1e-9) -f_(x)
-                                                                   << std::endl;
-           std::cout << "f_.d1(x)*f_.d1(x): " <<  f_.d1(x)*f_.d1(x) << std::endl;
-           std::cout << std::setprecision(20) << "NormDxBeforeUpdate: " << norm(dx)
-                           << std::endl;
+           std::tie(contraction,normDx1,normDx2,theta,thetaZero) = checkContraction(step,normDx, normDx1, normDx2, thetaZero, thetaGlobal);
 
            do
            {
@@ -199,13 +191,8 @@ std::tuple<bool, Vector, Real, Real> ACRSolver::solveParam(
 
                    auto dxDummy = get(lambda) * dx;
 
-                   std::cout << "DirectFunctionValueBeforeUpdate: f_(x+dx) :" << f_(x + dxDummy)
-                                                   << std::endl;
-
                    nonlinUpdate_(x, dxDummy);
 
-                   std::cout << "DirectFunctionValueAfterUpdate: f_(x+dx) :" << f_(x + dxDummy)
-                                                                           << std::endl;
 
                    LOG(log_tag, "lambda: ", lambda, " omega: ", omega_, "|dx|: " , norm(dxDummy), " cubicModel: ", cubicModel(lambda))
 
@@ -225,6 +212,7 @@ std::tuple<bool, Vector, Real, Real> ACRSolver::solveParam(
 
            }
            while (stepMonitor == StepMonitor::Rejected && omega_ <= omegaMax_ );   // Check if every case is covered !!
+
            if(stepMonitor == StepMonitor::Rejected  )
            {
                     std::cout << "Not converged: Should not happen: " << '\n';
@@ -235,84 +223,22 @@ std::tuple<bool, Vector, Real, Real> ACRSolver::solveParam(
            }
             LOG_SEPARATOR(log_tag);
 
-                norm_dx *= get(lambda);
-
-                // Correct Norm what about lagrange multplier ???
-                if (step > 2)
-                {
-                        norm_dx1 = norm_dx2;
-                        norm_dx2 = norm_dx;
-
-                        if (norm_dx2 > thetaGlobal * norm_dx1)
-                        {
-                                theta = norm_dx2 / norm_dx1;
-                                std::cout << "No convergence for inner solver in Iterate: " << step << " " << lambda_ << " " << norm_dx1
-                                                << " " << norm_dx2 << '\n';
-                                // return make tupel
-                                return std::make_tuple(converged_, x, theta, thetaZero);
-                        }
-
-//			else
-//			{
-//				if (std::isnan(get(theta)) || std::isinf(get(theta)))
-//				{
-//					std::cout << "Not a number: " << lambda << '\n';
-//					theta = thetaGlobal ;
-//				}
-//			}
-                        norm_dx1 = norm_dx2;
-                }
-
-                // improve what happens when convergence in first step !!
-                // check condition again
-                else if (step == 1)
-                {
-                        norm_dx1 = norm_dx;
-                        theta = 0.10;
-                        thetaZero = theta;
-                }
-
-                else if (step == 2)
-                {
-                        norm_dx2 = norm_dx;
-                        theta = norm_dx2 / norm_dx1;
-                        thetaZero = theta;
-
-                        /// change std::tie
-                        if (norm_dx2 > thetaGlobal * norm_dx1)
-                        {
-
-                                std::cout << "No convergence for inner solver first iterate: " << lambda_ << " " << norm_dx1
-                                                << " " << norm_dx2 << '\n';
-                                return std::make_tuple(converged_, x, theta, thetaZero);
-                        }
-                }
-
+               // Which termination criteria
+               // norm_dx *= get(lambda);
                 if (dxQNorm < epsilon_)
                 {
-                        std::cout << "Converged: " << std::endl;
-                        std::cout << "f_.d1(x)*f_.d1(x): " <<  f_.d1(x)*f_.d1(x) << std::endl;
+                        std::cout << "ACR Converged: " << '\n';
+                        std::cout << "f_.d1(x)*f_.d1(x): " <<  f_.d1(x)*f_.d1(x) << '\n';
                         converged_ = true;
                         return std::make_tuple(converged_, x, theta, thetaZero);
                 }
 
 
 }
+
+        throw Exception::NotConverged("Maximum number of iterations reached");
         return std::make_tuple(converged_, x, theta, thetaZero);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -362,9 +288,8 @@ else {
 //Change that Condition
 rho_ = diffFunction / diffModel;
 if (std::isnan(get(rho_)))
-{
 	rho_ = -1.0;
-}
+
 }
 LOG(log_tag, "f_(x+dx): ", f_(x+dx), "f_(x): ", f_(x), "CubicModel(lambda): ", cubicModel(lambda), "CubicModel(0): ", cubicModel(0), "rho: ", rho_, "eta1 ", eta1_, "eta2 ", eta2_ )
 
@@ -390,12 +315,12 @@ return omega;
 std::tuple<Vector,Real> ACRSolver::computeStep(const Spacy::Vector &x) const
 {
 
-
 	// Why not  get solverCreator directly from f ????
 	// make this a member
 LinearSolver preconditioner =
 { };
 preconditioner = f_.hessian(x) ^ -1;
+
 
 auto & cgSolver = cast_ref<CG::LinearSolver>(preconditioner);
 auto tcg = makeTCGSolver(f_.hessian(x), cgSolver.P());
@@ -410,5 +335,58 @@ tcg.setRelativeAccuracy(1e-10);
 
 return tcg.solve(-f_.d1(x));
 }
+
+
+std::tuple<bool,Real,Real,Real,Real> ACRSolver::checkContraction(int step, Real normDx,Real normDx1_, Real normDx2_, Real thetaZero_, Real thetaGlobal) const
+{
+    Real normDx1 = normDx1_;
+    Real normDx2 = normDx2_;
+    Real theta = thetaZero_;
+    Real thetaZero = thetaZero_;
+    bool contracted = true;
+
+    if (step > 2)
+    {
+            normDx1 = normDx2;
+            normDx2 = normDx;
+
+              theta = normDx2 / normDx1;
+
+              if (std::isnan(get(theta)) || std::isinf(get(theta)))
+                  throw Exception::InvalidArgument("Contraction Factor is NaN");
+
+            if (theta > thetaGlobal )
+            {
+                  std::cout << "No convergence for inner solver in Iterate: " << step  << " "<< theta << " " << normDx1
+                                    << " " << normDx2 << '\n';
+                  contracted = false;
+            }
+    }
+
+   else if(step ==1)
+        normDx1 = normDx;
+
+    else if (step == 2)
+    {
+            normDx2 = normDx;
+            theta = normDx2 / normDx1;
+            thetaZero = theta;
+
+            if (std::isnan(get(theta)) || std::isinf(get(theta)))
+                throw Exception::InvalidArgument("Contraction Factor is NaN");
+
+
+          if (theta > thetaGlobal )
+          {
+                std::cout << "No convergence for inner solver in Iterate: " << step  << " " << theta <<" " << normDx1
+                                  << " " << normDx2 << '\n';
+                contracted = false;
+          }
+    }
+
+    return std::make_tuple(contracted, normDx1, normDx2, thetaZero, theta);
+
+}
+
 }
 }
