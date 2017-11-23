@@ -74,10 +74,7 @@ namespace Spacy
                         */
               C2Functional & getFunctional();
 
-              /**
-              * @brief Test if ACR converged
-                         */
-              bool converged() const;
+
 
 
         private:
@@ -111,6 +108,11 @@ namespace Spacy
              */
             std::tuple<bool,Real,Real,Real,Real> checkContraction(int step, Real normDx,Real normDx1_, Real normDx2_, Real thetaZero_, Real thetaGlobal) const;
 
+            /**
+             * @brief Check if the convergence criterion is satisfied
+             */
+            bool convergenceTest( Real dxQNorm, const Vector & x) const;
+
 
             C2Functional f_;
             const VectorSpace& domain_;
@@ -122,7 +124,6 @@ namespace Spacy
             Real omega_ = 1e-6;
             std::function<void(Vector & x,  Vector& dx)>  nonlinUpdate_ = [](Vector & x,  Vector& dx){return;};
             std::function<void(const  Vector& dx)> output_ = []( const Vector& dx){return;};
-            mutable bool converged_ = false;
         };
     }
 }

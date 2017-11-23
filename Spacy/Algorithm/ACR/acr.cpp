@@ -60,19 +60,17 @@ Vector ACRSolver::operator()(const Vector& x0)
 	for (unsigned step = 1; step <= getMaxSteps(); ++step)
 	{
 
-		 LOG_SEPARATOR(log_tag);
+                LOG_SEPARATOR(log_tag);
 		LOG(log_tag, "Iteration", step)
 
 		stepMonitor = StepMonitor::Accepted;
 		// TODO domain_.setScalarProduct( );
 
-
 		std::tie(dx,dxQNorm) = computeStep(x);
-
 		std::cout << "DxQNorm: " << dxQNorm << std::endl;
-		if (dxQNorm < epsilon_)
+
+                if (dxQNorm < epsilon_)
 		{
-                        converged_ = true;
 			std::cout << "Converged: " << std::endl;
 			std::cout << "f_.d1(x)*f_.d1(x): " <<  f_.d1(x)*f_.d1(x) << std::endl;
 			return x;
@@ -131,7 +129,7 @@ Vector ACRSolver::operator()(const Vector& x0)
 		}
 	  LOG_SEPARATOR(log_tag);
 }
-
+  throw Exception::NotConverged("Maximum number of iterations reached");
 return x;
 }
 
@@ -155,13 +153,7 @@ std::tuple<bool, Vector, Real, Real> ACRSolver::solveParam(
 
         Real dxQNorm = 0.0;
 
-        converged_ = false;
         bool contraction = false;
-
-
-        // update penalty Parameter
-
-        // use std::function instead of
 
         for (unsigned step = 1; step <= getMaxSteps(); ++step)
         {
@@ -178,7 +170,10 @@ std::tuple<bool, Vector, Real, Real> ACRSolver::solveParam(
 
            std::cout << std::setprecision(20) << "DxQNorm: " << normDx << std::endl;
 
-           std::tie(contraction,normDx1,normDx2,theta,thetaZero) = checkContraction(step,normDx, normDx1, normDx2, thetaZero, thetaGlobal);
+           std::tie(contraction,normDx1,normDx2,thetaZero,theta) = checkContraction(step,normDx, normDx1, normDx2, thetaZero, thetaGlobal);
+
+           if(!contraction)
+               return std::make_tuple(contraction,x,thetaZero,theta);
 
            do
            {
@@ -213,31 +208,24 @@ std::tuple<bool, Vector, Real, Real> ACRSolver::solveParam(
            }
            while (stepMonitor == StepMonitor::Rejected && omega_ <= omegaMax_ );   // Check if every case is covered !!
 
-           if(stepMonitor == StepMonitor::Rejected  )
+           if(stepMonitor == StepMonitor::Rejected)
            {
-                    std::cout << "Not converged: Should not happen: " << '\n';
-                    theta = 1.0;
-                    thetaZero = 1.0;
-                    converged_ = false;
-                    return std::make_tuple(converged_, x, theta, thetaZero);
+               std::cout << "This should not happen: " << '\n';
+                return std::make_tuple(false,x,1.0, 1.0);
            }
-            LOG_SEPARATOR(log_tag);
 
-               // Which termination criteria
-               // norm_dx *= get(lambda);
-                if (dxQNorm < epsilon_)
-                {
-                        std::cout << "ACR Converged: " << '\n';
-                        std::cout << "f_.d1(x)*f_.d1(x): " <<  f_.d1(x)*f_.d1(x) << '\n';
-                        converged_ = true;
-                        return std::make_tuple(converged_, x, theta, thetaZero);
-                }
+
+           if(convergenceTest(dxQNorm,x))
+               return std::make_tuple(true,x, thetaZero, theta);
+
+
+           LOG_SEPARATOR(log_tag);
 
 
 }
 
         throw Exception::NotConverged("Maximum number of iterations reached");
-        return std::make_tuple(converged_, x, theta, thetaZero);
+        return std::make_tuple(false, x, thetaZero, theta);
 }
 
 
@@ -259,10 +247,7 @@ C2Functional &  ACRSolver::getFunctional()
     return f_;
 }
 
-bool ACRSolver::converged() const
-{
-    return converged_;
-}
+
 
 ACRSolver::StepMonitor ACRSolver::acceptanceTest(const Vector &x,
 	const Vector &dx, const Real & lambda,
@@ -388,5 +373,19 @@ std::tuple<bool,Real,Real,Real,Real> ACRSolver::checkContraction(int step, Real 
 
 }
 
+
+ bool ACRSolver::convergenceTest( Real dxQNorm, const Vector & x) const
+ {
+
+          if (dxQNorm < epsilon_)
+          {
+                  std::cout << "ACR Converged: " << '\n';
+                  std::cout << "f_.d1(x)*f_.d1(x): " <<  f_.d1(x)*f_.d1(x) << '\n';
+                  return true;
+ }
+
+          else
+              return false;
+}
 }
 }
