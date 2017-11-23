@@ -285,7 +285,7 @@ std::tuple<bool, Vector, Real, Real> AffineCovariantSolver::solvePath(
 				std::cout << "No convergence for inner solver in Iterate: " << step << " " << lambda << " " << norm_dx1
 						<< " " << norm_dx2 << '\n';
 				// return make tupel
-                                return std::make_tuple(converged, x, theta, thetaNull);
+                                return std::make_tuple(converged, x, thetaNull, theta);
 			}
 
 //			else
@@ -319,7 +319,7 @@ std::tuple<bool, Vector, Real, Real> AffineCovariantSolver::solvePath(
 
 				std::cout << "No convergence for inner solver first iterate: " << lambda << " " << norm_dx1
 						<< " " << norm_dx2 << '\n';
-                                return std::make_tuple(converged, x, theta, thetaNull);
+                                return std::make_tuple(converged, x, thetaNull, theta);
 			}
 		}
 
@@ -358,7 +358,7 @@ std::tuple<bool, Vector, Real, Real> AffineCovariantSolver::solvePath(
 //			std::cout << "TestDNNorm: " << norm(dn) << std::endl;
 			converged = true;
 			std::cout << "Converged: " << lambda << std::endl;
-			return std::tie(converged, x, theta, thetaNull);
+                        return std::tie(converged, x, thetaNull, theta);
 		}
 
 		if (verbose())
@@ -369,7 +369,7 @@ std::tuple<bool, Vector, Real, Real> AffineCovariantSolver::solvePath(
 		//        if( getVerbosityLevel() > 1 && norm_Dn > 0) std::cout << spacing2 << "(Dn,Dt) = " << Dn*Dt/(norm_Dn*norm(Dt)) << std::endl;
 	} // end iteration
 
-        return std::make_tuple(converged, x, theta, thetaNull);
+        return std::make_tuple(converged, x, thetaNull, theta);
 }
 
 C2Functional & AffineCovariantSolver::getNormalFunctional()
