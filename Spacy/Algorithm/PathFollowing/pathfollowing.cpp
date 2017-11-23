@@ -23,9 +23,9 @@ DEFINE_LOG_TAG( static const char* log_tag = "PathFollowing" );
 
 
 
-ClassicalContinuation::ClassicalContinuation(const Real & lambdaInit,
-		const Real & lambdaMax, const Real initialStepSize,
-		const Real minStepSize, const Real thetaMin) :
+ClassicalContinuation::ClassicalContinuation( Real  lambdaInit,
+                 Real  lambdaMax,  Real initialStepSize,
+                 Real minStepSize,  Real thetaMin) :
 		lambdaInit_(lambdaInit), lambdaMax_(lambdaMax), initialStepSize_(
 				initialStepSize), minStepSize_(minStepSize), thetaMin_(thetaMin)
 {
@@ -40,13 +40,7 @@ void ClassicalContinuation::setSolver(
     innerSolver_ = std::move(f);
 }
 
-void ClassicalContinuation::setFirstStepSolver(
-			std::function<
-					std::tuple<bool, Vector>(const Vector & x,
-							const Real & lambda)> f)
-{
-	solveFirstStep_ = std::move(f);
-}
+
 
 
 void ClassicalContinuation::setPlot(
@@ -76,28 +70,30 @@ Vector ClassicalContinuation::solve(const Vector & x0) const
     for (int step = 1; step <= maxIt; step++)
 	{
              stepsize = std::min(stepsize, lambdaMax_ -lambda);
-                LOG_SEPARATOR(log_tag);
-                LOG(log_tag, "Iteration", step)
-                 LOG(log_tag, "stepsize", stepsize, "lambda", lambda)
-		LOG(log_tag, "|x|", norm(x))
+
 
 		do
 		{
             auto lambdaNext = lambda + stepsize;
-                    std::cout << "LambdaTry: " << std::endl << std::endl;
-                        std::tie(converged, x_next, theta, thetaZero) =
+               std::cout << "LambdaTry: " << lambdaNext << std::endl << std::endl;
+                std::tie(converged, x_next, thetaZero, theta) =
                                 innerSolver_(x, lambdaNext, theta_);
 
-            stepsize = updateStepSize(converged, step, theta,thetaZero, stepsize);
+            stepsize = updateStepSize(converged, step, thetaZero, theta, stepsize);
 
 			if(converged)
 			{
 				x = x_next;
                                 std::cout << "Converged:  For lambda:  " << lambdaNext << std::endl;
                                 lambda = lambdaNext;
+                                plot_(x, step);
+
+                                LOG_SEPARATOR(log_tag);
+                                LOG(log_tag, "Iteration", step)
+                                LOG(log_tag, "stepsize", stepsize, "lambda", lambda)
+                                LOG(log_tag, "|x|", norm(x))
+                                LOG_SEPARATOR(log_tag);
 			}
-
-
 
         } while (!converged && stepsize > minStepSize_);
 
@@ -130,8 +126,6 @@ void ClassicalContinuation::testSetup(Real lambda, Real stepsize, Vector & x) co
     Real theta = 0.0;
     Real thetaZero = 0.0;
 
-   // std::tie(converged, x) = solveFirstStep_(x,lambda);
-
     std::tie(converged, x, theta, thetaZero) =
             innerSolver_(x, lambda, std::numeric_limits<double>::max());
 
@@ -149,10 +143,9 @@ bool ClassicalContinuation::testResult(bool converged, int step, Real lambda, Re
 
     if (converged && lambda == lambdaMax_ )
     {
-        plot_(x, step);
+        //plot_(x, step);
         result_ = Result::Converged;
-        LOG(log_tag, "stepsize", stepsize, "lambda", lambda)
-        LOG(log_tag, "|x|", norm(x))
+
         return true;
      }
 
@@ -170,9 +163,10 @@ bool ClassicalContinuation::testResult(bool converged, int step, Real lambda, Re
 
 }
 
-Real ClassicalContinuation::updateStepSize(bool converged, int step, Real theta, Real thetaZero,Real stepsize_) const
+Real ClassicalContinuation::updateStepSize(bool converged, int step, Real thetaZero, Real theta, Real stepsize_) const
 {
     auto stepsize = stepsize_;
+
     if(converged)
     {
         std::cout << "Converged: For s = " << stepsize << std::endl;

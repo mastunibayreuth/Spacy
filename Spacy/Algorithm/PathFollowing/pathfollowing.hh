@@ -57,9 +57,9 @@ public:
 	 * \param minStepSize  min stepsize to update parameter \f$ \lambda \f$
          * \param thetaMin
 	 */
-	ClassicalContinuation(const Real & lambdaInit, const Real & lambdaMax,
-			const Real initialStepSize = 100.0, const Real minStepSize = 0.1,
-                        const Real thetaMin = 1e-6);
+        ClassicalContinuation( Real lambdaInit = 0.0, Real lambdaMax = 100000,
+                         Real initialStepSize = 100.0,  Real minStepSize = 0.1,
+                         Real thetaMin = 1e-6);
 
 
 	/// Set the solution function for the Newton system
@@ -67,11 +67,6 @@ public:
 			std::function<
 					std::tuple<bool, Vector, Real, Real>(const Vector & x,
 							const Real & lambda, const Real & theta)>);
-
-	void setFirstStepSolver(
-			std::function<
-					std::tuple<bool, Vector>(const Vector & x,
-							const Real & lambda)>);
 
 	/// Set the plot function
 	void setPlot(std::function<void(const Vector & x, unsigned int step)>);
@@ -92,7 +87,7 @@ private:
    bool testResult(bool converged, int step, Real lambda, Real stepsize, const Vector & x) const;
 
    /// Test if algorithm converged
-   Real updateStepSize(bool converged, int step, Real theta, Real thetaZero, Real stepsize_) const;
+   Real updateStepSize(bool converged, int step, Real thetaZero, Real theta, Real stepsize_) const;
 
 
 	/// Solve the Newton system for a fixed parameter
@@ -105,14 +100,7 @@ private:
         return std::make_tuple(false,x,lambda,theta);
     };
 
-    /// Solve the first parameter system to get on the path
-	std::function<
-            std::tuple<bool, Vector>(const Vector & x, const Real & lambda)> solveFirstStep_ =
-            [](const Vector & x, const Real & lambda)
-    {
-        throw CallOfUndefinedFunctionException("Inner solver for the first step has not been set for path following");
-        return std::make_tuple(false,x);
-    };
+
 
 	/// Plot the solution \f$x(\lambda_{k})\f$ in each step
 	std::function<void(const Vector & x, unsigned int step)> plot_ =
